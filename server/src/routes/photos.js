@@ -4,7 +4,7 @@ import sharp from 'sharp';
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
-import { prisma } from '../lib/prisma.js';
+import { store, save } from '../lib/store.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 
 const router = Router();
@@ -38,11 +38,15 @@ const upload = multer({
 
 router.use(authenticate);
 
-router.get('/', async (req, res) => {
-  const photos = await prisma.photo.findMany({
-    orderBy: { createdAt: 'desc' },
-    include: { uploader: { select: { firstName: true, lastName: true } } },
-  });
+function withUploader(photo) {
+  const uploader = store.users.find((u) => u.id === photo.uploaderId);
+  return { ...photo, uploader: uploader ? { firstName: uploader.firstName, lastName: uploader.lastName } : null };
+}
+
+router.get('/', (req, res) => {
+  const photos = [...store.photos]
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .map(withUploader);
   res.json({ photos });
 });
 
@@ -73,27 +77,29 @@ router.post('/upload', requireRole('photos'), upload.array('files', 20), async (
       previewFilename = null;
     }
 
-    const photo = await prisma.photo.create({
-      data: {
-        filename: file.filename,
-        previewFilename,
-        originalName: file.originalname,
-        mimeType: file.mimetype,
-        size: file.size,
-        width,
-        height,
-        folder,
-        uploaderId: req.user.id,
-      },
-    });
-    created.push(photo);
+    const photo = {
+      id: crypto.randomUUID(),
+      filename: file.filename,
+      previewFilename,
+      originalName: file.originalname,
+      mimeType: file.mimetype,
+      size: file.size,
+      width,
+      height,
+      folder,
+      uploaderId: req.user.id,
+      createdAt: new Date().toISOString(),
+    };
+    store.photos.push(photo);
+    created.push(withUploader(photo));
   }
+  save();
 
   res.status(201).json({ photos: created });
 });
 
-router.get('/:id/preview', async (req, res) => {
-  const photo = await prisma.photo.findUnique({ where: { id: req.params.id } });
+router.get('/:id/preview', (req, res) => {
+  const photo = store.photos.find((p) => p.id === req.params.id);
   if (!photo) return res.status(404).json({ error: 'Introuvable' });
   const filePath = photo.previewFilename
     ? path.join(PREVIEWS_DIR, photo.previewFilename)
@@ -102,20 +108,22 @@ router.get('/:id/preview', async (req, res) => {
   res.sendFile(filePath);
 });
 
-router.get('/:id/download', async (req, res) => {
-  const photo = await prisma.photo.findUnique({ where: { id: req.params.id } });
+router.get('/:id/download', (req, res) => {
+  const photo = store.photos.find((p) => p.id === req.params.id);
   if (!photo) return res.status(404).json({ error: 'Introuvable' });
   const filePath = path.join(ORIGINALS_DIR, photo.filename);
   res.download(filePath, photo.originalName);
 });
 
-router.delete('/:id', requireRole('photos'), async (req, res) => {
-  const photo = await prisma.photo.findUnique({ where: { id: req.params.id } });
-  if (!photo) return res.status(404).json({ error: 'Introuvable' });
+router.delete('/:id', requireRole('photos'), (req, res) => {
+  const index = store.photos.findIndex((p) => p.id === req.params.id);
+  if (index === -1) return res.status(404).json({ error: 'Introuvable' });
+  const photo = store.photos[index];
   if (photo.uploaderId !== req.user.id && !req.user.isAdmin) {
     return res.status(403).json({ error: 'Tu ne peux supprimer que tes propres photos' });
   }
-  await prisma.photo.delete({ where: { id: req.params.id } });
+  store.photos.splice(index, 1);
+  save();
   fs.unlink(path.join(ORIGINALS_DIR, photo.filename), () => {});
   if (photo.previewFilename) fs.unlink(path.join(PREVIEWS_DIR, photo.previewFilename), () => {});
   res.json({ ok: true });

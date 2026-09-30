@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { prisma } from '../lib/prisma.js';
+import { store } from '../lib/store.js';
 import { verifyPassword, signToken, publicUser } from '../lib/auth.js';
 import { authenticate } from '../middleware/auth.js';
 
@@ -16,10 +16,7 @@ router.post('/login', async (req, res) => {
   const { email, password } = req.body ?? {};
   if (!email || !password) return res.status(400).json({ error: 'Email et mot de passe requis' });
 
-  const user = await prisma.user.findUnique({
-    where: { email: email.toLowerCase().trim() },
-    include: { roles: { include: { role: true } } },
-  });
+  const user = store.users.find((u) => u.email === email.toLowerCase().trim());
   if (!user || !user.active) return res.status(401).json({ error: 'Identifiants invalides' });
 
   const valid = await verifyPassword(password, user.passwordHash);

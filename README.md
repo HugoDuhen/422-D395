@@ -5,9 +5,15 @@ additionnels (sport, photos, cadre, ...) qui débloquent des droits d'édition o
 
 ## Stack
 
-- **Serveur** : Node.js + Express + Prisma (SQLite en dev, MySQL en prod) + JWT (cookie httpOnly)
+- **Serveur** : Node.js + Express + JWT (cookie httpOnly). Stockage des données en **fichier JSON
+  local** (`server/data/db.json`), pas de base de données — simple à faire tourner n'importe où,
+  y compris en local sans rien à installer à part Node.
 - **Client** : React + Vite + Tailwind CSS v4 + Framer Motion, mobile-first
 - Une seule app Node déployée : le serveur sert l'API (`/api/*`) et les fichiers statiques du build client.
+
+> Le stockage JSON convient pour une section (usage modéré, un seul process Node). Si le projet
+> grossit ou qu'un vrai hébergement avec base de données est disponible plus tard, il sera temps de
+> migrer vers une DB — pas avant.
 
 ## Rôles
 
@@ -34,6 +40,17 @@ additionnels (sport, photos, cadre, ...) qui débloquent des droits d'édition o
 - L'upload utilise un simple `<input type="file" accept="image/*" multiple>`, ce qui ouvre sur mobile le
   sélecteur natif (galerie + appareil photo), pour envoyer plusieurs photos existantes facilement.
 
+## Stockage des données
+
+Tout vit dans `server/data/db.json` (utilisateurs, rôles, publications sport, métadonnées photos) —
+un objet `{ users: [], roles: [], sportEntries: [], photos: [] }` réécrit à chaque écriture
+(atomique via fichier temporaire + renommage). Les fichiers photo (originaux + aperçus) vivent à côté
+dans `server/uploads/`.
+
+**Sauvegarde** : ces deux dossiers (`server/data/`, `server/uploads/`) sont tout ce qu'il faut copier
+pour sauvegarder ou migrer l'appli. À faire régulièrement (ex: copie automatique quotidienne) une fois
+en prod.
+
 ## Développement local
 
 ```bash
@@ -41,17 +58,16 @@ additionnels (sport, photos, cadre, ...) qui débloquent des droits d'édition o
 cd server
 cp .env.example .env
 npm install
-npx prisma db push       # crée dev.db (SQLite)
-node prisma/seed.js      # crée les rôles par défaut + un compte admin
-npm run dev               # http://localhost:3001
+npm run seed       # crée les rôles par défaut + un compte admin dans data/db.json
+npm run dev         # http://localhost:3001
 
 # Client (autre terminal)
 cd client
 npm install
-npm run dev               # http://localhost:5173 (proxy /api vers le serveur)
+npm run dev         # http://localhost:5173 (proxy /api vers le serveur)
 ```
 
-Identifiants du compte admin créés par le seed : voir la sortie de `node prisma/seed.js`
+Identifiants du compte admin créés par le seed : voir la sortie de `npm run seed`
 (configurable via `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` dans `.env`). **Change ce mot de passe
 dès la première connexion.**
 
@@ -64,42 +80,16 @@ cd ../server && npm install --omit=dev
 
 Le serveur sert automatiquement `client/dist` en production (`NODE_ENV=production`).
 
-## Déploiement sur o2switch (cPanel)
+## Déploiement (o2switch ou ailleurs)
 
-1. **Base de données MySQL** : crée une base MySQL depuis cPanel, note utilisateur/mot de
-   passe/nom de base.
-2. **Datasource Prisma** : dans `server/prisma/schema.prisma`, passe `provider = "sqlite"` à
-   `provider = "mysql"`. Renseigne `DATABASE_URL="mysql://USER:PASSWORD@localhost:3306/DBNAME"`
-   dans `server/.env` (côté serveur o2switch, pas dans le repo).
-3. **App Node.js (cPanel → "Configuration Node.js")** :
-   - Version Node : la plus récente disponible (Node 20+).
-   - Dossier racine de l'app : `server`.
-   - Fichier de démarrage (Application startup file) : `src/index.js`.
-   - Mode : Production.
-   - Variables d'environnement à définir dans l'interface cPanel : `DATABASE_URL`, `JWT_SECRET`
-     (chaîne longue aléatoire), `PORT` (généralement imposé par cPanel/Passenger), `UPLOADS_DIR`
-     (ex: `/home/USER/section-uploads` — en dehors du dossier servi publiquement).
-4. Depuis le terminal cPanel (ou SSH) :
-   ```bash
-   cd ~/section/server
-   npm install --omit=dev
-   npx prisma generate
-   npx prisma db push          # crée les tables sur MySQL (premier déploiement)
-   node prisma/seed.js         # crée les rôles + le compte admin initial
-   ```
-   Puis build le client (peut se faire en local et uploader `client/dist`, ou directement sur le
-   serveur si Node/npm y sont dispo pour le build) :
-   ```bash
-   cd ~/section/client
-   npm install
-   npm run build
-   ```
-5. Redémarre l'app Node depuis cPanel ("Restart").
-6. Pointe le domaine/sous-domaine de la section vers l'app Node (cPanel s'en charge via le proxy
-   Passenger une fois l'app configurée).
+Pas d'accès o2switch pour l'instant — à faire quand ce sera disponible. En résumé, ça sera :
 
-### Mises à jour ultérieures du schéma
+1. **App Node.js** (cPanel → "Configuration Node.js") : dossier racine `server`, fichier de démarrage
+   `src/index.js`, mode Production.
+2. Variables d'environnement à définir : `JWT_SECRET` (chaîne longue aléatoire), `PORT` (imposé par
+   Passenger), `UPLOADS_DIR` et `DATA_FILE` pointant vers des chemins **persistants** en dehors du
+   dossier de déploiement (pour ne pas perdre les données à chaque redéploiement).
+3. `npm install --omit=dev`, `npm run seed` (une seule fois, pour créer le premier compte admin),
+   build du client (`cd client && npm install && npm run build`), puis redémarrage de l'app.
 
-Pour un petit projet avec un seul environnement de prod, le plus simple reste `npx prisma db push`
-après avoir modifié `schema.prisma` (pousse le nouveau schéma sur MySQL sans gérer de fichiers de
-migration séparés). Attention aux avertissements de perte de données si tu supprimes une colonne.
+Aucune base de données à créer — le fichier JSON suffit tant que l'appli tourne sur un seul process.

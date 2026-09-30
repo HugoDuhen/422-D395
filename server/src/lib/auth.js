@@ -21,7 +21,6 @@ export function verifyToken(token) {
 }
 
 export function publicUser(user) {
-  const { passwordHash, roles, roleKeys, ...rest } = user;
-  const keys = roleKeys ?? (roles ? roles.map((ur) => ur.role.key) : undefined);
-  return keys ? { ...rest, roles: keys } : rest;
+  const { passwordHash, ...rest } = user;
+  return rest;
 }
