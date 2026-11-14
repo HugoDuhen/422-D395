@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { store } from '../lib/store.js';
+import { query } from '../lib/db.js';
+import { mapUser } from '../lib/mappers.js';
 import { verifyPassword, signToken, publicUser } from '../lib/auth.js';
 import { authenticate } from '../middleware/auth.js';
 
@@ -16,7 +17,8 @@ router.post('/login', async (req, res) => {
   const { email, password } = req.body ?? {};
   if (!email || !password) return res.status(400).json({ error: 'Email et mot de passe requis' });
 
-  const user = store.users.find((u) => u.email === email.toLowerCase().trim());
+  const { rows } = await query('SELECT * FROM users WHERE email = $1', [email.toLowerCase().trim()]);
+  const user = mapUser(rows[0]);
   if (!user || !user.active) return res.status(401).json({ error: 'Identifiants invalides' });
 
   const valid = await verifyPassword(password, user.passwordHash);

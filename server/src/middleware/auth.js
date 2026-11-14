@@ -1,4 +1,5 @@
-import { store } from '../lib/store.js';
+import { query } from '../lib/db.js';
+import { mapUser } from '../lib/mappers.js';
 import { verifyToken } from '../lib/auth.js';
 
 export async function authenticate(req, res, next) {
@@ -7,7 +8,8 @@ export async function authenticate(req, res, next) {
 
   try {
     const payload = verifyToken(token);
-    const user = store.users.find((u) => u.id === payload.sub);
+    const { rows } = await query('SELECT * FROM users WHERE id = $1', [payload.sub]);
+    const user = mapUser(rows[0]);
     if (!user || !user.active) return res.status(401).json({ error: 'Non authentifié' });
     req.user = user;
     next();
