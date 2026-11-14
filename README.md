@@ -28,28 +28,27 @@ additionnels (sport, photos, cadre, ...) qui débloquent des droits d'édition o
   membres concernés. Un nouveau rôle ne donne des droits d'édition que si le code d'une route les
   vérifie explicitement (ex: `requireRole('cuisine')`) — sinon il sert de simple badge/filtre.
 
-## Photos / drive
+## Photos
 
-- Les photos sont stockées en qualité originale (`server/uploads/originals`) et un aperçu compressé
-  (WebP, 1600px de large max) est généré à l'upload avec `sharp` (`server/uploads/previews`).
-- La page Photos affiche les aperçus (chargement rapide), et propose un bouton "Qualité max" qui
-  télécharge le fichier original.
-- Formats acceptés : JPEG, PNG, WebP, GIF, HEIC/HEIF (iPhone). Si `sharp`/libvips ne sait pas décoder un
-  HEIC sur l'hébergement (dépend du build), l'app bascule automatiquement l'original en aperçu — l'upload
-  ne casse jamais, seul l'aperçu peut être plus lourd que prévu pour ces cas-là.
-- L'upload utilise un simple `<input type="file" accept="image/*" multiple>`, ce qui ouvre sur mobile le
-  sélecteur natif (galerie + appareil photo), pour envoyer plusieurs photos existantes facilement.
+Les photos elles-mêmes ne sont **pas** hébergées par l'appli : elles vivent dans des **albums
+partagés iCloud** créés à côté. L'appli ne gère que la liste des liens (titre, URL de l'album,
+description, qui l'a ajouté). Avantage : zéro stockage fichier côté serveur, zéro limite de taille à
+gérer.
+
+- N'importe quel membre avec le rôle `photos` peut ajouter/modifier/supprimer un lien d'album (le
+  sien, ou n'importe lequel si admin).
+- Tout le monde peut voir la liste et cliquer pour ouvrir l'album sur iCloud.
+- Le champ lien accepte n'importe quelle URL `http(s)://` (pas restreint à icloud.com, au cas où un
+  autre service serait utilisé un jour).
 
 ## Stockage des données
 
-Tout vit dans `server/data/db.json` (utilisateurs, rôles, publications sport, métadonnées photos) —
-un objet `{ users: [], roles: [], sportEntries: [], photos: [] }` réécrit à chaque écriture
-(atomique via fichier temporaire + renommage). Les fichiers photo (originaux + aperçus) vivent à côté
-dans `server/uploads/`.
+Tout vit dans `server/data/db.json` (utilisateurs, rôles, publications sport, liens d'albums photos) —
+un objet `{ users: [], roles: [], sportEntries: [], albums: [] }` réécrit à chaque écriture
+(atomique via fichier temporaire + renommage). Aucun fichier binaire à stocker côté serveur.
 
-**Sauvegarde** : ces deux dossiers (`server/data/`, `server/uploads/`) sont tout ce qu'il faut copier
-pour sauvegarder ou migrer l'appli. À faire régulièrement (ex: copie automatique quotidienne) une fois
-en prod.
+**Sauvegarde** : ce seul fichier (`server/data/db.json`) suffit à sauvegarder ou migrer toutes les
+données de l'appli.
 
 ## Développement local
 
@@ -87,8 +86,8 @@ Pas d'accès o2switch pour l'instant — à faire quand ce sera disponible. En r
 1. **App Node.js** (cPanel → "Configuration Node.js") : dossier racine `server`, fichier de démarrage
    `src/index.js`, mode Production.
 2. Variables d'environnement à définir : `JWT_SECRET` (chaîne longue aléatoire), `PORT` (imposé par
-   Passenger), `UPLOADS_DIR` et `DATA_FILE` pointant vers des chemins **persistants** en dehors du
-   dossier de déploiement (pour ne pas perdre les données à chaque redéploiement).
+   Passenger), `DATA_FILE` pointant vers un chemin **persistant** en dehors du dossier de déploiement
+   (pour ne pas perdre les données à chaque redéploiement).
 3. `npm install --omit=dev`, `npm run seed` (une seule fois, pour créer le premier compte admin),
    build du client (`cd client && npm install && npm run build`), puis redémarrage de l'app.
 

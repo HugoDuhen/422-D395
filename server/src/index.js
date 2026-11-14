@@ -9,7 +9,7 @@ import authRoutes from './routes/auth.js';
 import userRoutes from './routes/users.js';
 import roleRoutes from './routes/roles.js';
 import sportRoutes from './routes/sport.js';
-import photoRoutes from './routes/photos.js';
+import albumRoutes from './routes/albums.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CLIENT_DIST = path.resolve(__dirname, '../../client/dist');
@@ -26,7 +26,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/roles', roleRoutes);
 app.use('/api/sport', sportRoutes);
-app.use('/api/photos', photoRoutes);
+app.use('/api/albums', albumRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);

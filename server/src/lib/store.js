@@ -4,7 +4,7 @@ import path from 'node:path';
 const DATA_FILE = path.resolve(process.env.DATA_FILE || './data/db.json');
 
 function defaultData() {
-  return { users: [], roles: [], sportEntries: [], photos: [] };
+  return { users: [], roles: [], sportEntries: [], albums: [] };
 }
 
 function load() {
